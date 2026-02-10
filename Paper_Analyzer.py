@@ -9,11 +9,20 @@ from datetime import datetime
 
 # Page config must be first Streamlit command
 st.set_page_config(
-    page_title="Paper Analyzer",
+    page_title="Research Paper Analyzer",
     page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Bridge Streamlit Cloud secrets to env vars (for agents using os.getenv)
+for key in ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_DEPLOYMENT_NAME", "AZURE_OPENAI_API_VERSION"]:
+    if key not in os.environ:
+        try:
+            os.environ[key] = st.secrets[key]
+        except (KeyError, FileNotFoundError):
+            pass
 
 # --- Agent Selection Config ---
 AGENT_OPTIONS = {
