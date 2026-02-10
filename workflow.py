@@ -15,16 +15,16 @@ from datetime import datetime
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
 
 class PaperAnalyzerWorkflow:
     """Orchestrates all 8 agents to analyze research papers"""
-    
+
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.methodology_critic = MethodologyCritic()
         self.results_synthesizer = ResultsSynthesizer()
         self.citation_hunter = CitationHunter()
@@ -119,7 +119,7 @@ Return JSON only:
         # Send up to 60k chars (enough for ~25 page papers, within GPT-4o's 128k context)
         text_to_analyze = full_text[:60000]
 
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},

@@ -9,12 +9,6 @@ from PIL import Image
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
-
 
 class DataVisualizationCritic:
     """Agent 7: Analyzes data visualizations against best practices (Tufte, Cleveland, Few)"""
@@ -24,6 +18,11 @@ class DataVisualizationCritic:
     MAX_FIGURES = 20
 
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
 
         self.figure_prompt = """You are an expert data visualization critic specializing in scientific figures.
@@ -253,7 +252,7 @@ Return valid JSON:
 
     def _analyze_single_figure(self, figure_data, figure_number):
         """Analyze a single figure using GPT-4.1 Vision"""
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": self.figure_prompt},
@@ -293,7 +292,7 @@ Return valid JSON:
             text_input += f"\n\nRESULTS SECTION:\n{results_section[:8000]}"
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.caption_prompt},
@@ -381,7 +380,7 @@ Average figure score: {avg_score}/5
 Provide your holistic assessment."""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.synthesis_prompt},

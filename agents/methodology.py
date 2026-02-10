@@ -5,16 +5,16 @@ import json
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
 
 class MethodologyCritic:
     """Agent 1: Analyzes research methodology"""
-    
+
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         
         self.system_prompt = """You are a research methodology expert.
@@ -93,7 +93,7 @@ Return JSON:
         if results_text:
             user_content += f"\n\n## Results Section (additional context)\n\n{results_text}"
 
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": self.system_prompt},

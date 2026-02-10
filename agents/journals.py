@@ -7,17 +7,16 @@ import time
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
-
 
 class JournalRecommender:
     """Agent 5: Recommends journals for paper submission using OpenAlex data"""
 
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         self.openalex_base = "https://api.openalex.org"
         self.openalex_email = os.getenv("OPENALEX_EMAIL", "")
@@ -241,7 +240,7 @@ Return JSON:
 }}"""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "You are an expert academic advisor who knows the journal landscape across all research fields."},
@@ -277,7 +276,7 @@ Abstract: {abstract[:2000]}
 Generate 3 search queries to find similar papers in academic databases."""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.query_extraction_prompt},
@@ -326,7 +325,7 @@ Based on the paper's content, quality, and the journal data above, provide your 
 Ensure impact_factor_2yr, h_index, is_open_access, apc_usd, homepage_url, and issn in each recommendation
 match the data provided. Fill in publisher from the data. Set similar_papers_found from the data."""
 
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": self.system_prompt},
@@ -364,7 +363,7 @@ to null for any values you are not certain about. Set similar_papers_found to 0 
 Provide your ranked recommendations."""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},

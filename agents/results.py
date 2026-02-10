@@ -5,16 +5,16 @@ import json
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
 
 class ResultsSynthesizer:
     """Agent 2: Extracts and synthesizes key findings"""
-    
+
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         
         self.system_prompt = """You are a results analyst expert.
@@ -84,7 +84,7 @@ Return JSON:
         
         print("📊 Agent 2 (Results Synthesizer) analyzing...\n")
         
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": self.system_prompt},

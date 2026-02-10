@@ -7,12 +7,6 @@ from collections import Counter
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
-
 
 class WritingQualityCoach:
     """Agent 8: Evaluates academic writing quality against style guide standards"""
@@ -103,6 +97,11 @@ class WritingQualityCoach:
     }
 
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
 
         self.section_prompt = """You are an expert academic writing coach who evaluates scientific paper sections
@@ -317,7 +316,7 @@ TEXT TO ANALYZE:
 {text_to_analyze}"""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.section_prompt},
@@ -367,7 +366,7 @@ BENCHMARKS for reference:
 Provide your holistic assessment."""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.synthesis_prompt},

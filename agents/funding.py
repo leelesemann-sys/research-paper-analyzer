@@ -7,17 +7,16 @@ import time
 
 load_dotenv()
 
-client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
-
 
 class FundingAdvisor:
     """Agent 6: Identifies funding sources for research using OpenAlex data"""
 
     def __init__(self):
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+        )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         self.openalex_base = "https://api.openalex.org"
         self.openalex_email = os.getenv("OPENALEX_EMAIL", "")
@@ -203,7 +202,7 @@ Return JSON:
 }}"""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "Generate concise academic search queries. Each query should be 3-6 words."},
@@ -239,7 +238,7 @@ Enrich each funder with your knowledge about their specific programs, typical am
 Be honest: if the funding data coverage is low, say so."""
 
         try:
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},
