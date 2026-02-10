@@ -1186,8 +1186,9 @@ def render_funding_tab(funding):
 
 
 def run_analysis(pdf_path, selected_agents):
-    """Run the analysis workflow, only running selected agents"""
+    """Run the analysis workflow with parallel agent execution."""
     from workflow import PaperAnalyzerWorkflow
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     workflow = PaperAnalyzerWorkflow()
 
@@ -1200,68 +1201,109 @@ def run_analysis(pdf_path, selected_agents):
     is_review = paper_type in ("review", "meta_analysis")
     yield {"step": "sections_extracted", "paper_type": paper_type, "sections": sections}
 
-    # Results Synthesizer
-    if "results" in selected_agents:
+    # --- Define agent tasks as callables ---
+    def run_results():
+        if "results" not in selected_agents:
+            return _skipped_data("results")
         if sections.get('results'):
-            results_analysis = workflow.results_synthesizer.analyze(sections['results'])
+            return workflow.results_synthesizer.analyze(sections['results'])
         elif sections.get('discussion'):
-            results_analysis = workflow.results_synthesizer.analyze(sections['discussion'])
-        else:
-            results_analysis = workflow._empty_results_analysis()
-    else:
-        results_analysis = _skipped_data("results")
-    yield {"step": "agent2_done", "data": results_analysis}
+            return workflow.results_synthesizer.analyze(sections['discussion'])
+        return workflow._empty_results_analysis()
 
-    # Writing Coach
-    if "writing" in selected_agents:
-        writing_analysis = workflow.writing_coach.analyze(sections, paper_type)
-    else:
-        writing_analysis = _skipped_data("writing")
-    yield {"step": "agent8_done", "data": writing_analysis}
+    def run_writing():
+        if "writing" not in selected_agents:
+            return _skipped_data("writing")
+        return workflow.writing_coach.analyze(sections, paper_type)
 
-    # Methodology Critic
-    if "methodology" in selected_agents:
+    def run_methodology():
+        if "methodology" not in selected_agents:
+            return _skipped_data("methodology")
         if is_review:
-            methods_analysis = workflow._review_methods_analysis()
+            return workflow._review_methods_analysis()
         elif sections.get('methods'):
-            methods_analysis = workflow.methodology_critic.analyze(
+            return workflow.methodology_critic.analyze(
                 sections['methods'],
                 abstract=sections.get('abstract', ''),
                 results_text=sections.get('results', '')
             )
-        else:
-            methods_analysis = workflow._empty_methods_analysis()
-    else:
-        methods_analysis = _skipped_data("methodology")
-    yield {"step": "agent1_done", "data": methods_analysis}
+        return workflow._empty_methods_analysis()
 
-    # DataViz Critic
-    if "visualization" in selected_agents:
-        visualization_analysis = workflow.visualization_critic.analyze(
+    def run_dataviz():
+        if "visualization" not in selected_agents:
+            return _skipped_data("visualization")
+        return workflow.visualization_critic.analyze(
             pdf_path, full_text, sections.get('results', '')
         )
-    else:
-        visualization_analysis = _skipped_data("visualization")
-    yield {"step": "agent7_done", "data": visualization_analysis}
 
-    # Agent 3 - Citations
-    if "citations" in selected_agents:
-        citation_analysis = workflow.citation_hunter.analyze(
+    def run_citations():
+        if "citations" not in selected_agents:
+            return _skipped_data("citations")
+        return workflow.citation_hunter.analyze(
             sections.get('title', 'Unknown Title'),
             sections.get('abstract', '')
         )
-    else:
-        citation_analysis = _skipped_data("citations")
-    yield {"step": "agent3_done", "data": citation_analysis}
 
-    # Agent 4 - Plagiarism
-    if "plagiarism" in selected_agents:
-        plagiarism_analysis = workflow.plagiarism_detector.analyze(full_text, paper_type)
-    else:
-        plagiarism_analysis = _skipped_data("plagiarism")
-    yield {"step": "agent4_done", "data": plagiarism_analysis}
+    def run_plagiarism():
+        if "plagiarism" not in selected_agents:
+            return _skipped_data("plagiarism")
+        return workflow.plagiarism_detector.analyze(full_text, paper_type)
 
-    # Agent 5 - Journals
+    def run_funding():
+        if "funding" not in selected_agents:
+            return _skipped_data("funding")
+        return workflow.funding_advisor.analyze(
+            sections.get('title', 'Unknown Title'),
+            sections.get('abstract', ''),
+            paper_type=paper_type
+        )
+
+    # --- Phase 1: Run 7 independent agents in parallel ---
+    yield {"step": "parallel_start"}
+
+    parallel_tasks = {
+        "results": run_results,
+        "writing": run_writing,
+        "methodology": run_methodology,
+        "visualization": run_dataviz,
+        "citations": run_citations,
+        "plagiarism": run_plagiarism,
+        "funding": run_funding,
+    }
+
+    step_names = {
+        "results": "agent2_done",
+        "writing": "agent8_done",
+        "methodology": "agent1_done",
+        "visualization": "agent7_done",
+        "citations": "agent3_done",
+        "plagiarism": "agent4_done",
+        "funding": "agent6_done",
+    }
+
+    agent_results = {}
+    with ThreadPoolExecutor(max_workers=7) as executor:
+        future_to_agent = {
+            executor.submit(fn): name for name, fn in parallel_tasks.items()
+        }
+        for future in as_completed(future_to_agent):
+            agent_name = future_to_agent[future]
+            try:
+                agent_results[agent_name] = future.result()
+            except Exception as e:
+                print(f"Agent {agent_name} failed: {e}")
+                agent_results[agent_name] = _skipped_data(agent_name)
+            yield {"step": step_names[agent_name], "data": agent_results[agent_name]}
+
+    results_analysis = agent_results["results"]
+    writing_analysis = agent_results["writing"]
+    methods_analysis = agent_results["methodology"]
+    visualization_analysis = agent_results["visualization"]
+    citation_analysis = agent_results["citations"]
+    plagiarism_analysis = agent_results["plagiarism"]
+    funding_recommendations = agent_results["funding"]
+
+    # --- Phase 2: Journals (depends on methodology + results) ---
     if "journals" in selected_agents:
         methods_quality_score = methods_analysis.get('overall_quality')
         evidence_strength_val = results_analysis.get('strength_of_evidence', '')
@@ -1275,17 +1317,6 @@ def run_analysis(pdf_path, selected_agents):
     else:
         journal_recommendations = _skipped_data("journals")
     yield {"step": "agent5_done", "data": journal_recommendations}
-
-    # Agent 6 - Funding
-    if "funding" in selected_agents:
-        funding_recommendations = workflow.funding_advisor.analyze(
-            sections.get('title', 'Unknown Title'),
-            sections.get('abstract', ''),
-            paper_type=paper_type
-        )
-    else:
-        funding_recommendations = _skipped_data("funding")
-    yield {"step": "agent6_done", "data": funding_recommendations}
 
     # Generate markdown report
     report = workflow.generate_report(
@@ -1410,19 +1441,26 @@ if uploaded_file is not None and st.session_state.analysis_result is None:
                     step_map = {"pdf_extracted": 1, "sections_extracted": 2}
 
                     agent_steps = [
-                        ("results", "agent2_done", "Results Synthesizer: Synthesizing results...", "📊"),
-                        ("writing", "agent8_done", "Writing Coach: Evaluating writing quality...", "✍️"),
-                        ("methodology", "agent1_done", "Methodology Critic: Analyzing methodology...", "🔬"),
-                        ("visualization", "agent7_done", "DataViz Critic: Analyzing data visualizations...", "📈"),
-                        ("citations", "agent3_done", "Citation Hunter: Searching related literature...", "🔗"),
-                        ("plagiarism", "agent4_done", "Plagiarism Detector: Checking integrity...", "🚨"),
-                        ("journals", "agent5_done", "Journal Recommender: Recommending journals...", "📚"),
-                        ("funding", "agent6_done", "Funding Advisor: Searching funding sources...", "💰"),
+                        ("results", "agent2_done", "Results Synthesizer", "📊"),
+                        ("writing", "agent8_done", "Writing Coach", "✍️"),
+                        ("methodology", "agent1_done", "Methodology Critic", "🔬"),
+                        ("visualization", "agent7_done", "DataViz Critic", "📈"),
+                        ("citations", "agent3_done", "Citation Hunter", "🔗"),
+                        ("plagiarism", "agent4_done", "Plagiarism Detector", "🚨"),
+                        ("journals", "agent5_done", "Journal Recommender", "📚"),
+                        ("funding", "agent6_done", "Funding Advisor", "💰"),
                     ]
-                    for agent_key, step_name, label, icon in agent_steps:
-                        if agent_key in selected_agents:
-                            steps.append((label, icon))
-                            step_map[step_name] = len(steps) - 1
+                    # Parallel agents get a single progress step
+                    active_parallel = [a for a in agent_steps if a[0] in selected_agents and a[0] != "journals"]
+                    steps.append(("Running agents in parallel...", "⚡"))
+                    step_map["parallel_start"] = len(steps) - 1
+                    parallel_done_count = 0
+                    parallel_total = len(active_parallel)
+                    for agent_key, step_name, label, icon in active_parallel:
+                        step_map[step_name] = len(steps) - 1  # all map to same parallel step
+                    if "journals" in selected_agents:
+                        steps.append(("Journal Recommender: Recommending journals...", "📚"))
+                        step_map["agent5_done"] = len(steps) - 1
 
                     steps.append(("Generating report...", "📝"))
                     total_steps = len(steps)
@@ -1463,6 +1501,17 @@ if uploaded_file is not None and st.session_state.analysis_result is None:
                                 progress_bar.progress(1.0, text="Analysis complete!")
                                 status_text.markdown("**Analysis complete!**")
                                 final_result = update
+                            elif step_name == "parallel_start":
+                                idx = step_map[step_name]
+                                current_step = idx
+                                status_text.markdown(f"**⚡ Running {parallel_total} agents in parallel...**")
+                                progress_bar.progress(idx / total_steps, text=f"Running {parallel_total} agents in parallel...")
+                            elif step_name in step_map and step_name.startswith("agent") and step_name != "agent5_done":
+                                parallel_done_count += 1
+                                agent_label = next((l for k, s, l, i in agent_steps if s == step_name), step_name)
+                                status_text.markdown(f"**⚡ {agent_label} done ({parallel_done_count}/{parallel_total})**")
+                                progress_frac = (step_map["parallel_start"] + parallel_done_count / max(parallel_total, 1)) / total_steps
+                                progress_bar.progress(min(progress_frac, 0.99), text=f"{agent_label} done ({parallel_done_count}/{parallel_total})")
                             elif step_name in step_map:
                                 idx = step_map[step_name]
                                 current_step = idx
