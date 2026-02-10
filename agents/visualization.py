@@ -15,7 +15,7 @@ class DataVisualizationCritic:
 
     MAX_IMAGE_DIMENSION = 1024
     MIN_IMAGE_DIMENSION = 50
-    MAX_FIGURES = 20
+    MAX_FIGURES = 5
 
     def __init__(self):
         self.client = AzureOpenAI(

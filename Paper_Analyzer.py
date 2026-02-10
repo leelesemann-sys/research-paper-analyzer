@@ -1352,6 +1352,8 @@ if "analysis_result" not in st.session_state:
     st.session_state.analysis_result = None
 if "analyzing" not in st.session_state:
     st.session_state.analyzing = False
+if "demo_mode" not in st.session_state:
+    st.session_state.demo_mode = False
 
 # Action bar (above file uploader, visible when results exist)
 if st.session_state.analysis_result is not None:
@@ -1382,32 +1384,125 @@ if st.session_state.analysis_result is not None:
             "journals": _r.get('journals'),
             "funding": _r.get('funding')
         }, indent=2, ensure_ascii=False)
-        # Auto-save JSON to data/output/
-        _json_output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "output")
-        os.makedirs(_json_output_dir, exist_ok=True)
-        _json_filename = os.path.join(_json_output_dir, f"analysis_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-        if not os.path.exists(_json_filename):
-            with open(_json_filename, "w", encoding="utf-8") as _jf:
-                _jf.write(_json_data)
+        # Auto-save JSON to data/output/ (only for real analyses, not demo mode)
+        _json_filename = f"analysis_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        if not st.session_state.get("demo_mode", False):
+            _json_output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "output")
+            os.makedirs(_json_output_dir, exist_ok=True)
+            _json_filepath = os.path.join(_json_output_dir, _json_filename)
+            if not os.path.exists(_json_filepath):
+                try:
+                    with open(_json_filepath, "w", encoding="utf-8") as _jf:
+                        _jf.write(_json_data)
+                except Exception:
+                    pass
         st.download_button(
             "Download Data (JSON)",
             data=_json_data,
-            file_name=os.path.basename(_json_filename),
+            file_name=_json_filename,
             mime="application/json",
             use_container_width=True
         )
     with col3:
         if st.button("Analyze Another Paper", use_container_width=True):
             st.session_state.analysis_result = None
+            st.session_state.demo_mode = False
             st.rerun()
     st.markdown("---")
 
-# Upload area
-uploaded_file = st.file_uploader(
-    "Upload your research paper (PDF)",
-    type=["pdf"],
-    help="Supported: Original Research, Reviews, Meta-Analyses, Case Studies"
-)
+# --- Demo Mode ---
+DEMO_PAPERS = {
+    "healthcare": {
+        "file": "demo_data/demo_healthcare_original.json",
+        "title": "Hospital Variation in THR Outcomes",
+        "subtitle": "Multicenter Cohort Study (n=583)",
+        "type": "Original Research",
+        "field": "Healthcare / Orthopedics",
+        "icon": "🏥",
+        "highlight": "Strong methodology, detailed funding analysis"
+    },
+    "hiv": {
+        "file": "demo_data/demo_hiv_review.json",
+        "subtitle": "From ART to Long-Acting Injectables",
+        "title": "Pharmacological Advances in HIV Treatment",
+        "type": "Review Article",
+        "field": "Pharmacology / Infectious Disease",
+        "icon": "💊",
+        "highlight": "Review paper analysis, writing coach feedback"
+    },
+    "trading": {
+        "file": "demo_data/demo_ai_trading.json",
+        "title": "ML Framework for Stock Market Prediction",
+        "subtitle": "Ensemble Models, Fusion & Transfer Learning",
+        "type": "Original Research",
+        "field": "Quantitative Finance / AI",
+        "icon": "📈",
+        "highlight": "Complex methodology, 4 figures analyzed"
+    }
+}
+
+def load_demo(demo_key):
+    """Load pre-computed demo analysis from JSON"""
+    demo = DEMO_PAPERS[demo_key]
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), demo["file"])
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data
+
+# Show demo section only when no results are displayed
+if st.session_state.analysis_result is None:
+    st.markdown("""
+    <div style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-top: 3px solid #43a047;">
+        <h3 style="color: #2e7d32; margin-top: 0;">🎯 Explore Demo Analyses</h3>
+        <p style="color: #666; margin-bottom: 0.5rem;">
+            See instant results from pre-analyzed papers — no upload or wait time needed.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    demo_cols = st.columns(3)
+    for idx, (key, demo) in enumerate(DEMO_PAPERS.items()):
+        with demo_cols[idx]:
+            type_color = "#2e7d32" if demo["type"] == "Original Research" else "#1565c0"
+            st.markdown(f"""
+            <div style="background: white; border-radius: 10px; padding: 1.2rem;
+                        box-shadow: 0 1px 6px rgba(0,0,0,0.08); border-left: 4px solid {type_color};
+                        min-height: 220px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="font-size: 1.8rem; margin-bottom: 0.3rem;">{demo['icon']}</div>
+                    <div style="font-weight: 700; color: #333; font-size: 0.95rem; line-height: 1.3;">
+                        {demo['title']}
+                    </div>
+                    <div style="color: #888; font-size: 0.8rem; margin-top: 0.2rem;">{demo['subtitle']}</div>
+                    <div style="margin-top: 0.6rem;">
+                        <span style="background: {'#e8f5e9' if demo['type'] == 'Original Research' else '#e3f2fd'};
+                                     color: {type_color}; padding: 0.15rem 0.5rem; border-radius: 12px;
+                                     font-size: 0.75rem; font-weight: 600;">{demo['type']}</span>
+                        <span style="color: #999; font-size: 0.75rem; margin-left: 0.4rem;">{demo['field']}</span>
+                    </div>
+                    <div style="color: #666; font-size: 0.8rem; margin-top: 0.5rem; font-style: italic;">
+                        {demo['highlight']}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"View Analysis", key=f"demo_{key}", use_container_width=True):
+                demo_data = load_demo(key)
+                st.session_state.analysis_result = demo_data
+                st.session_state.demo_mode = True
+                st.rerun()
+
+    st.markdown("")
+
+# Upload area (only show when no results are displayed)
+uploaded_file = None
+if st.session_state.analysis_result is None:
+    uploaded_file = st.file_uploader(
+        "Upload your research paper (PDF)",
+        type=["pdf"],
+        help="Supported: Original Research, Reviews, Meta-Analyses, Case Studies"
+    )
 
 if uploaded_file is not None and st.session_state.analysis_result is None:
     st.markdown(f"**Uploaded:** {uploaded_file.name} ({uploaded_file.size / 1024:.0f} KB)")
@@ -1633,8 +1728,8 @@ if st.session_state.analysis_result is not None:
     with tab9:
         st.markdown(report_md)
 
-elif uploaded_file is None:
-    # Welcome state - show example/info
+elif uploaded_file is None and st.session_state.analysis_result is None:
+    # Welcome state - show how it works
     st.markdown("")
 
     col1, col2, col3 = st.columns(3)
@@ -1666,6 +1761,6 @@ elif uploaded_file is None:
     st.markdown("")
     st.markdown("""
     <div style="text-align: center; color: #888; padding: 2rem;">
-        <p style="font-size: 1.1rem;">Upload a PDF to get started</p>
+        <p style="font-size: 1.1rem;">Upload a PDF or try a demo above to get started</p>
     </div>
     """, unsafe_allow_html=True)
