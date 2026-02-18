@@ -1,5 +1,7 @@
 # Research Paper Analyzer
 
+> **Language:** English | [Deutsch](README.de.md)
+
 **AI-powered analysis of scientific research papers using 8 specialized agents.**
 
 Upload any research paper PDF and receive a comprehensive, multi-dimensional analysis in minutes — covering methodology, writing quality, data visualizations, citations, plagiarism risk, journal recommendations, and funding opportunities.
